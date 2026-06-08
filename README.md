@@ -199,7 +199,7 @@ curl -sf http://192.168.64.3:3100/health | python3 -m json.tool
 | Bridge `/chat` returns 404 | Run `scripts/fix-openclaw-chat-api.sh` inside KASM xterm |
 | `Failed to reach agent bridge` / `ETIMEDOUT` | `ports` mapping missing in Docker Run Config Override, or `KASM_BRIDGE_URL` wrong — verify `curl http://<kasm-vm-ip>:3100/health` from your Mac |
 | `request_kasm failed: An Unexpected Error occurred` | Invalid Docker Run Config Override — use docker-py kwargs (`ports`, not `port_map`); also check for host-port `3100` conflict |
-| Gemini 503 errors | Google API overloaded — wait and retry, or switch to gemini-2.0-flash |
+| Agent asks name/vibe/emoji instead of doing the task | OpenClaw **first-run bootstrap** — workspace missing SOUL.md/IDENTITY.md and `skipBootstrap`. Fixed by `seed-agent-workspace.js` + `skipBootstrap: true`. Rebuild image or re-hire after fix. |
 
 ---
 

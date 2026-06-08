@@ -23,6 +23,8 @@ set -euo pipefail
 # ── Env defaults ──────────────────────────────────────────────────────────────
 AGENT_ID="${AGENT_ID:-agent_local}"
 AGENT_ROLE="${AGENT_ROLE:-General Assistant}"
+AGENT_JOB_TITLE="${AGENT_JOB_TITLE:-${AGENT_ROLE}}"
+SPONSOR_NAME="${SPONSOR_NAME:-User}"
 LLM_PROVIDER="${LLM_PROVIDER:-google}"
 LLM_MODEL="${LLM_MODEL:-gemini-2.0-flash}"
 LLM_API_KEY="${LLM_API_KEY:-}"
@@ -94,6 +96,12 @@ mkdir -p "${OC_DIR}/workspace"
 node /opt/teambots_openclaw/scripts/generate-openclaw-config.js \
   >> "${LOG_DIR}/startup.log" 2>&1 \
   || die "generate-openclaw-config.js failed — see startup.log"
+
+# Pre-seed workspace identity files so OpenClaw skips the first-run Q&A ritual.
+node /opt/teambots_openclaw/scripts/seed-agent-workspace.js \
+  >> "${LOG_DIR}/startup.log" 2>&1 \
+  || die "seed-agent-workspace.js failed — see startup.log"
+log "Agent workspace seeded (${AGENT_ROLE})"
 
 # Validate before starting — invalid config makes gateway exit immediately.
 if openclaw config validate >> "${LOG_DIR}/startup.log" 2>&1; then

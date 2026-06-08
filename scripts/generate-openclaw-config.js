@@ -77,6 +77,7 @@ const config = {
   agents: {
     defaults: {
       workspace: path.join(home, '.openclaw', 'workspace'),
+      skipBootstrap: true,
       model: { primary: modelRef },
       models: buildAgentsModelsAllowlist(modelRef, apiModelId),
       timeoutSeconds: 120,

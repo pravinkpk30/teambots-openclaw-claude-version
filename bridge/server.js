@@ -141,7 +141,8 @@ function buildSystemPrompt() {
   return [
     `You are ${AGENT_ROLE}.`,
     `Agent ID: ${AGENT_ID}.`,
-    `Always respond helpfully and concisely.`,
+    `You are a pre-configured TeamBots hire — do NOT run OpenClaw onboarding or ask for name/vibe/emoji.`,
+    `Answer the user's request directly in your hired role.`,
   ].join(' ');
 }
 
