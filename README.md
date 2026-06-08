@@ -4,6 +4,9 @@ Hire AI agents from a React UI. Each agent runs in a **KASM workspace** containe
 with **OpenClaw** (gateway + skills) and a **TeamBots bridge** that relays chat
 between the React app and the agent.
 
+**Full architecture & workflow guide:** [WORKFLOW.md](./WORKFLOW.md)  
+**Questions & answers (xterm, tokens, webhooks, workspace files):** [FAQ.md](./FAQ.md)
+
 ---
 
 ## Architecture
