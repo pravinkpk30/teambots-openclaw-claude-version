@@ -24,7 +24,21 @@ const GATEWAY_PORT   = parseInt(process.env.GATEWAY_PORT   || '18789', 10);
 const GATEWAY_URL    = `http://127.0.0.1:${GATEWAY_PORT}`;
 const AGENT_ID       = process.env.AGENT_ID    || 'unknown';
 const AGENT_ROLE     = process.env.AGENT_ROLE  || 'General Assistant';
+const LLM_PROVIDER   = process.env.LLM_PROVIDER || 'google';
+const LLM_MODEL      = process.env.LLM_MODEL || 'gemini-2.0-flash';
 const BRIDGE_TOKEN   = process.env.TEAMBOTS_TOKEN;
+
+function resolveModelRef() {
+  if (process.env.MODEL_REF) return process.env.MODEL_REF;
+  try {
+    const { resolveModelRef: resolve } = require('/opt/teambots_openclaw/openclaw_models');
+    return resolve(LLM_PROVIDER, LLM_MODEL).modelRef;
+  } catch {
+    return `${LLM_PROVIDER}/${LLM_MODEL}`;
+  }
+}
+
+const MODEL_REF = resolveModelRef();
 
 // Log directory (writable inside container)
 const LOG_DIR = process.env.TEAMBOTS_LOG_DIR || `${process.env.HOME || '/root'}/.teambots/logs`;
@@ -71,16 +85,16 @@ app.post('/chat', auth, async (req, res) => {
     return res.status(400).json({ error: 'message is required' });
   }
 
-  log('INFO', 'chat request', { conversation_id, len: message.length });
+  log('INFO', 'chat request', { conversation_id, len: message.length, model: MODEL_REF });
 
   try {
-    // Wait for OpenClaw gateway to be ready (retry up to 30s)
     const gatewayToken = await getGatewayToken();
 
     const gwRes = await axios.post(
       `${GATEWAY_URL}/v1/chat/completions`,
       {
         model: 'openclaw/default',
+        user: conversation_id ? `conv:${conversation_id}` : `agent:${AGENT_ID}`,
         messages: [
           { role: 'system', content: buildSystemPrompt() },
           { role: 'user',   content: message },
@@ -91,6 +105,7 @@ app.post('/chat', auth, async (req, res) => {
         headers: {
           'Content-Type':  'application/json',
           'Authorization': `Bearer ${gatewayToken}`,
+          'x-openclaw-model': MODEL_REF,
         },
         timeout: 90_000,
       }
@@ -98,6 +113,13 @@ app.post('/chat', auth, async (req, res) => {
 
     const choice  = gwRes.data?.choices?.[0];
     const content = choice?.message?.content || '';
+    if (!content.trim() || content.trim() === 'No response from OpenClaw.') {
+      log('WARN', 'empty gateway reply', { conversation_id, finish: choice?.finish_reason });
+      return res.status(502).json({
+        error: 'Agent returned an empty response',
+        detail: 'OpenClaw completed without text output. Check ~/.teambots/logs/openclaw-gateway.log',
+      });
+    }
     log('INFO', 'chat ok', { conversation_id, responseLen: content.length });
 
     return res.json({
@@ -143,6 +165,7 @@ function buildSystemPrompt() {
     `Agent ID: ${AGENT_ID}.`,
     `You are a pre-configured TeamBots hire — do NOT run OpenClaw onboarding or ask for name/vibe/emoji.`,
     `Answer the user's request directly in your hired role.`,
+    `Do not use web_search or other tools unless explicitly asked to browse the web.`,
   ].join(' ');
 }
 

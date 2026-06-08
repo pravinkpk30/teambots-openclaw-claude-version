@@ -83,6 +83,12 @@ const config = {
       timeoutSeconds: 120,
     },
   },
+  // TeamBots chat UI only needs text replies — disable web_search/exec tools that
+  // fail in KASM containers and cause empty "No response from OpenClaw." payloads.
+  tools: {
+    profile: 'minimal',
+    web: { search: { enabled: false } },
+  },
 };
 
 if (Object.keys(providers).length) {
