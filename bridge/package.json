@@ -1,0 +1,13 @@
+{
+  "name": "teambots-bridge",
+  "version": "1.0.0",
+  "description": "TeamBots bridge — runs inside KASM container, proxies to OpenClaw gateway",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "express": "^4.18.2"
+  }
+}

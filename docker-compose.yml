@@ -1,0 +1,37 @@
+version: '3.9'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — Local development only (backend + frontend)
+#
+# The actual OpenClaw agent image runs inside KASM, not here.
+# This compose file is for running the backend + frontend on your Mac.
+#
+# Usage:
+#   cp .env.example .env   # fill in values
+#   docker compose up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
+    ports:
+      - "4000:4000"
+    env_file: .env
+    volumes:
+      - ./backend/logs:/app/logs
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:4000
+    depends_on:
+      - backend
+    restart: unless-stopped
