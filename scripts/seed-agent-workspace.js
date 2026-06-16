@@ -29,7 +29,23 @@ const emojiByRole = {
 };
 const emoji = emojiByRole[role] || '🤖';
 
+const artifactRulesByRole = {
+  'Invoice Agent': `- Deliver invoices as **html artifacts** with \`generatePdf: true\` (invoice-{number}.html).
+- Include vendor/client details, line items, tax, totals, and payment terms.`,
+  'Marketing Researcher': `- Deliver market summaries as **html dashboards** or **markdown** artifacts.
+- Use tables/charts in HTML when presenting KPIs or trends.`,
+  'Competitive Intelligence Analyst': `- Deliver competitive briefs as **html** or **markdown** artifacts.`,
+  'Content Brief Writer': `- Deliver content briefs as **markdown** or **html** artifacts.`,
+  'Sales Outreach Assistant': `- Deliver email sequences and templates as **markdown** or **html** artifacts.`,
+  'Customer Support Triage Agent': `- Deliver triage summaries as **markdown** or **json** artifacts when structured.`,
+  'Engineering Research Assistant': `- Deliver technical summaries as **markdown** artifacts; use **html** for architecture diagrams/tables.`,
+  'General Assistant': `- Deliver web pages, login forms, and dashboards as **html artifacts** with inline CSS.`,
+};
+
+const artifactRules = artifactRulesByRole[role] || artifactRulesByRole['General Assistant'];
+
 fs.mkdirSync(path.join(workspace, 'skills'), { recursive: true });
+fs.mkdirSync(path.join(workspace, 'outputs'), { recursive: true });
 
 const files = {
   'IDENTITY.md': `# Identity
@@ -64,7 +80,33 @@ You are a **pre-configured TeamBots agent**. Identity is already set in IDENTITY
 2. **Answer the task.** Respond to what the user asked (research, outlines, analysis, drafts, etc.).
 3. **Stay in role** as ${role} / ${jobTitle}.
 4. **Do not mention** BOOTSTRAP.md, workspace setup, or internal OpenClaw files unless debugging.
-5. **No tools for simple chat.** Answer from your knowledge directly. Do not call web_search, web_fetch, or exec unless the user explicitly asks you to browse the web.
+5. **Web search via OpenClaw tools.** When the user asks for latest news, trends, headlines, or current events, call the **web_search** tool (and **web_fetch** if needed). Summarize results with titles and URLs. Do not refuse by saying you cannot browse the web.
+6. **ClawHub skills.** Follow installed skill playbooks in \`~/.openclaw/workspace/skills/\` when they match the task (e.g. invoice, summarize).
+7. **Other tools.** Use MCP tools (\`bundle-mcp\`) when configured and relevant. Avoid exec unless explicitly required.
+
+## Deliverables (web pages, reports, invoices, documents)
+
+When the user asks for a page, dashboard, report, invoice, or downloadable file:
+
+1. Reply with a **short summary** (1–3 sentences) in plain text.
+2. Put the full deliverable in a **teambots-artifact** marker (do not paste large HTML in chat):
+
+\`\`\`
+<!-- teambots-artifact
+{
+  "type": "html",
+  "title": "Descriptive title",
+  "filename": "descriptive-name.html",
+  "content": "<!DOCTYPE html>..."
+}
+\`\`\`
+
+Supported types: \`html\`, \`pdf\` (with \`content_base64\`), \`json\`, \`csv\`, \`markdown\`, \`text\`.
+Set \`"generatePdf": true\` on html artifacts when a PDF download is appropriate.
+
+### Role-specific deliverable guidance
+
+${artifactRules}
 `,
 };
 

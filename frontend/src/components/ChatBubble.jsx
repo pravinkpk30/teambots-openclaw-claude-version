@@ -1,8 +1,11 @@
 // frontend/src/components/ChatBubble.jsx
 import React from 'react';
+import ArtifactCard from './ArtifactCard';
 
 export default function ChatBubble({ msg }) {
   const isUser = msg.role === 'user';
+  const hasArtifacts = !isUser && Array.isArray(msg.artifacts) && msg.artifacts.length > 0;
+
   return (
     <div
       style={{
@@ -21,7 +24,7 @@ export default function ChatBubble({ msg }) {
       )}
       <div
         style={{
-          maxWidth: '72%',
+          maxWidth: hasArtifacts ? '88%' : '72%',
           padding: '10px 16px',
           borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
           background: isUser ? 'var(--accent)' : 'var(--surface2)',
@@ -33,6 +36,9 @@ export default function ChatBubble({ msg }) {
         }}
       >
         {msg.content}
+        {hasArtifacts && msg.artifacts.map((artifact) => (
+          <ArtifactCard key={artifact.filename} artifact={artifact} />
+        ))}
         {msg.error && (
           <div style={{ color: 'var(--danger)', marginTop: 4, fontSize: 12 }}>
             ⚠️ {msg.error}

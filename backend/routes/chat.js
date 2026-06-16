@@ -20,6 +20,7 @@ const axios   = require('axios');
 const router  = express.Router({ mergeParams: true });
 const registry = require('../services/registry');
 const log      = require('../services/logger').chat;
+const { enrichArtifacts } = require('../services/artifactUrls');
 
 const CHAT_TIMEOUT_MS = parseInt(process.env.KASM_CHAT_TIMEOUT_MS || '120000', 10);
 
@@ -55,7 +56,11 @@ router.post('/', async (req, res) => {
       }
     );
     log.info('chat response received', { agentId, conversation_id });
-    return res.json(response.data);
+    const payload = { ...response.data };
+    if (payload.artifacts?.length) {
+      payload.artifacts = enrichArtifacts(agentId, payload.artifacts, req);
+    }
+    return res.json(payload);
   } catch (err) {
     const status = err.response?.status;
     const detail = err.response?.data || err.message;

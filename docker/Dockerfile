@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     openssl \
     xterm \
+    wkhtmltopdf \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Node.js 22 ────────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ RUN cp /opt/teambots_openclaw/custom_startup.sh "${STARTUPDIR}/custom_startup.sh
 # Runtime dirs for kasm-user. OpenClaw/npm may create ~/.openclaw as root during
 # image build or on persistent profiles — pre-create with correct ownership so
 # kasm_start_agent.sh can write openclaw.json at hire time.
-RUN mkdir -p /home/kasm-user/.openclaw /home/kasm-user/.teambots/logs \
+RUN mkdir -p /home/kasm-user/.openclaw /home/kasm-user/.teambots/logs /home/kasm-user/.teambots/artifacts \
     && chown -R 1000:1000 /home/kasm-user/.openclaw /home/kasm-user/.teambots \
     && chown -R 1000:1000 /opt/teambots_openclaw
 

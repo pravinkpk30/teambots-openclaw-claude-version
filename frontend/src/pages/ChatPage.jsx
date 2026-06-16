@@ -101,10 +101,11 @@ export default function ChatPage() {
     try {
       const data = await sendMessage(agentId, text, CONV_ID);
       const content = data.message || data.response?.message || JSON.stringify(data);
+      const artifacts = data.artifacts || [];
 
       setMessages(prev => prev
         .filter(m => m.id !== thinkId)
-        .concat({ id: Date.now(), role: 'assistant', content })
+        .concat({ id: Date.now(), role: 'assistant', content, artifacts })
       );
     } catch (err) {
       const errMsg = err.response?.data?.error || err.message;

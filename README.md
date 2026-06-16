@@ -203,7 +203,7 @@ curl -sf http://192.168.64.3:3100/health | python3 -m json.tool
 | `Failed to reach agent bridge` / `ETIMEDOUT` | `ports` mapping missing in Docker Run Config Override, or `KASM_BRIDGE_URL` wrong — verify `curl http://<kasm-vm-ip>:3100/health` from your Mac |
 | `request_kasm failed: An Unexpected Error occurred` | Invalid Docker Run Config Override — use docker-py kwargs (`ports`, not `port_map`); also check for host-port `3100` conflict |
 | Agent asks name/vibe/emoji instead of doing the task | OpenClaw **first-run bootstrap** — workspace missing SOUL.md/IDENTITY.md and `skipBootstrap`. Fixed by `seed-agent-workspace.js` + `skipBootstrap: true`. Rebuild image or re-hire after fix. |
-| Web search tool error / "No response from OpenClaw." | OpenClaw tried `web_search` (not configured in KASM) or returned empty tool-only output. Fixed with `tools.profile: minimal` in config. Check `tail -f ~/.teambots/logs/bridge.log` for chat activity (xterm only shows heartbeats). |
+| Web search tool error / "No response from OpenClaw." | Check `~/.openclaw/openclaw.json`: `tools.web.search.enabled` should be `true` for research agents. Verify outbound HTTPS from KASM. Try `TEAMBOTS_WEB_SEARCH_PROVIDER=duckduckgo` in backend `.env`. Check `tail -f ~/.teambots/logs/openclaw-gateway.log`. |
 
 ---
 

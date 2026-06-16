@@ -329,7 +329,9 @@ Writes OpenClaw **2026.6.x** config:
 - Enables `chatCompletions` HTTP endpoint
 - Sets primary model (e.g. `google/gemini-2.0-flash`)
 - Registers custom Gemini models (e.g. `gemini-3.5-flash`) if needed
-- Sets `tools.profile: minimal` (chat-only, no web_search failures)
+- Sets `tools.web.search.enabled` per hire (`TEAMBOTS_ENABLE_WEB_SEARCH`, role-based from UI)
+- Uses `tools.profile: messaging` when web search is on (includes `web_search`/`web_fetch`); `minimal` when off
+- Optional `tools.allow: bundle-mcp` when MCP servers configured via `TEAMBOTS_MCP_SERVERS`
 - Sets `skipBootstrap: true`
 
 ### 6.4 `seed-agent-workspace.js`
@@ -354,7 +356,8 @@ Pre-fills workspace so OpenClaw does **not** ask "what's your name/vibe/emoji?":
 
 - Small Express server (`bridge/server.js`)
 - **`GET /health`** — liveness; returns `agent_id`, `role`
-- **`POST /chat`** — authenticated with `TEAMBOTS_TOKEN`; proxies to OpenClaw
+- **`GET /artifacts/:filename`** — serves HTML/PDF/JSON/CSV deliverables from `~/.teambots/artifacts/`
+- **`POST /chat`** — authenticated with `TEAMBOTS_TOKEN`; proxies to OpenClaw; parses artifact protocol and returns `artifacts[]`
 - Logs to `~/.teambots/logs/bridge.log` and `bridge-stdout.log`
 
 ---
@@ -373,6 +376,7 @@ Express app entry point. Mounts routes, CORS, loads `.env`.
 |------|----------|---------|
 | `routes/hire.js` | `POST /api/agents/hire` | Create KASM user, start container, inject env vars |
 | `routes/chat.js` | `POST /api/agents/:agentId/chat` | Forward message to `KASM_BRIDGE_URL/chat` |
+| `routes/artifacts.js` | `GET /api/agents/:agentId/artifacts/:filename` | Proxy deliverables from bridge |
 | `routes/agents.js` | `GET /api/agents`, `GET/DELETE /api/agents/:id` | List, status, terminate |
 | `routes/webhooks.js` | `POST /webhooks/agent-ready` | Container tells backend "I'm ready" |
 
@@ -408,7 +412,8 @@ Location: `frontend/src/`
 | `services/agentProfiles.js` | Agent role definitions (see [§9](#9-configured-agent-profiles)) |
 | `services/api.js` | Axios calls to backend |
 | `components/AgentCard.jsx` | Hire page agent tile |
-| `components/ChatBubble.jsx` | Message bubble UI |
+| `components/ChatBubble.jsx` | Message bubble UI + artifact cards |
+| `components/ArtifactCard.jsx` | Preview, open, download, PDF link for deliverables |
 | `components/StatusBadge.jsx` | provisioning / ready / error badge |
 
 ---
@@ -421,8 +426,8 @@ Defined in `frontend/src/services/agentProfiles.js`. One **Docker image** serves
 |------------|------|--------------------------|-------------|
 | `general` | General Assistant | none | Everyday Q&A |
 | `invoice` | Invoice Agent | `invoice` | Invoices, billing |
-| `marketing` | Marketing Researcher | `summarize` | Market research, outlines |
-| `competitive` | Competitive Intelligence Analyst | `summarize`, `github` | Competitor tracking |
+| `marketing` | Marketing Researcher | `summarize` | Market research, web search enabled |
+| `competitive` | Competitive Intelligence Analyst | `summarize`, `github` | Competitor tracking, web search enabled |
 | `content` | Content Brief Writer | `summarize` | Content briefs, outlines |
 | `sales` | Sales Outreach Assistant | `summarize` | Outreach copy |
 | `support` | Customer Support Triage Agent | `summarize` | Ticket triage |

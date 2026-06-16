@@ -63,11 +63,12 @@ async function createUser(username, password) {
  * Returns the full kasm object (includes kasm_id, status, etc.)
  */
 async function requestKasm({ userId, imageId, envVars }) {
+  const environment = sanitizeEnvironment(envVars);
   const body = {
     ...auth(),
     user_id:  userId,
     image_id: imageId,
-    environment: envVars,
+    environment,
   };
   const res = await client().post('/api/public/request_kasm', body);
 
@@ -80,7 +81,13 @@ async function requestKasm({ userId, imageId, envVars }) {
     // no resources, invalid run config, etc.) — surface it instead of
     // crashing later on kasm.kasm_id.
     const reason = res.data?.error_message || JSON.stringify(res.data) || 'unknown error';
-    log.error('requestKasm failed', { reason, image_id: imageId });
+    log.error('requestKasm failed', { reason, image_id: imageId, env_keys: Object.keys(environment) });
+    if (reason === 'Invalid Request') {
+      throw new Error(
+        `KASM request_kasm failed: Invalid Request — KASM_IMAGE_ID is likely wrong or stale (${imageId}). ` +
+        'After rebuilding/re-registering the workspace, copy the fresh Image ID from KASM Admin → Workspaces into backend/.env (or root .env for docker compose), then restart the backend.'
+      );
+    }
     throw new Error(`KASM request_kasm failed: ${reason}`);
   }
 
@@ -149,5 +156,12 @@ async function getKasms() {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/** Drop empty optional values — KASM rejects some blank environment entries. */
+function sanitizeEnvironment(envVars) {
+  return Object.fromEntries(
+    Object.entries(envVars).filter(([, value]) => value !== '' && value != null)
+  );
+}
 
 module.exports = { createUser, requestKasm, waitForRunning, keepalive, destroyKasm, getKasms };

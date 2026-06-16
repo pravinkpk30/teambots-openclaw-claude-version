@@ -1,14 +1,14 @@
-# UC-007: Agent Sprawl Governance
+# UC-006: Private AI Healthcare Workflow
 
-**Category:** Enterprise governance, lifecycle management  
-**Primary value:** Shows how TeamBots helps enterprises manage duplicate, unmanaged, costly, risky AI agents.  
+**Category:** Private AI, regulated workflows, sensitive data  
+**Primary value:** Shows how a customer hires a private TeamBot for sensitive healthcare work with private brain, restricted tools, and full audit.  
 **MVP priority:** High  
 
 ---
 
 ## Goal
 
-Shows how TeamBots helps enterprises manage duplicate, unmanaged, costly, risky AI agents.
+Shows how a customer hires a private TeamBot for sensitive healthcare work with private brain, restricted tools, and full audit.
 
 ---
 
@@ -23,27 +23,28 @@ As a responsible business user, I want this TeamBots flow to be governed, visibl
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Admin
-    participant Dashboard as AI Workforce Dashboard
-    participant Registry as Agent Registry
-    participant Usage as Usage Service
-    participant Skills as Skills Service
-    participant Sponsor as Sponsor Service
-    participant Recs as Recommendation Engine
+    actor Sponsor
+    participant Web as TeamBots Web App
+    participant Store as TOZ Store / E3DB
+    participant Agent as Private TeamBot
+    participant Brain as Private Brain Router
+    participant Workspace as Kasm / Private Workspace
+    participant Currents
     participant Audit
-    Admin->>Dashboard: Open agent sprawl dashboard
-    Dashboard->>Registry: Load all agents
-    Dashboard->>Usage: Load cost/activity data
-    Dashboard->>Skills: Load tools/skills risk profile
-    Dashboard->>Sponsor: Load sponsor assignments
-    Dashboard->>Recs: Analyze duplicates, idle agents, unsponsored agents
-    Recs-->>Dashboard: Return risk and consolidation recommendations
-    Admin->>Dashboard: Review duplicate Marketing Research agents
-    Admin->>Dashboard: Assign sponsor / pause / merge recommendation
-    Dashboard->>Registry: Update agent status or sponsor
-    Dashboard->>Audit: agent.paused / sponsor.assigned / recommendation.reviewed
-    Admin->>Dashboard: Export governance summary
-    Dashboard->>Audit: governance_report.exported
+    participant Billing
+    Sponsor->>Web: Hire Private Healthcare KPI Analyst
+    Web->>Agent: Create private TeamBot
+    Web->>Brain: Force private brain for sensitive workflows
+    Sponsor->>Store: Upload sensitive KPI file
+    Store-->>Web: Encrypted/sensitive file reference
+    Sponsor->>Agent: Assign KPI review task
+    Agent->>Brain: Request private model only
+    Agent->>Workspace: Start private workspace if needed
+    Agent->>Store: Read approved file reference
+    Agent->>Agent: Process / summarize / normalize
+    Agent->>Currents: Post non-sensitive status
+    Agent->>Audit: private_workflow.completed
+    Agent->>Billing: Record private brain usage
 ```
 
 ---

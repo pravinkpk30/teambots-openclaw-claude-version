@@ -3,7 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AgentCard from '../components/AgentCard';
 import StatusBadge from '../components/StatusBadge';
-import profiles, { LLM_PROVIDERS } from '../services/agentProfiles';
+import profiles, {
+  LLM_PROVIDERS,
+  findProvider,
+  getDefaultModelId,
+  getModelId,
+  getModelLabel,
+} from '../services/agentProfiles';
 import { hireAgent, getAgent } from '../services/api';
 
 const POLL_INTERVAL_MS = 3000;
@@ -14,7 +20,7 @@ export default function HirePage() {
 
   const [selectedProfile, setSelectedProfile] = useState(profiles[0]);
   const [provider, setProvider]               = useState(LLM_PROVIDERS[0]);
-  const [model, setModel]                     = useState(LLM_PROVIDERS[0].models[0]);
+  const [model, setModel]                     = useState(getDefaultModelId(LLM_PROVIDERS[0].id));
   const [apiKey, setApiKey]                   = useState('');
   const [sponsor, setSponsor]                 = useState('');
   const [loading, setLoading]                 = useState(false);
@@ -26,7 +32,7 @@ export default function HirePage() {
 
   // When provider changes, reset model to first of that provider
   useEffect(() => {
-    setModel(provider.models[0]);
+    setModel(getDefaultModelId(provider.id));
   }, [provider]);
 
   // Clear polling on unmount
@@ -52,6 +58,7 @@ export default function HirePage() {
         llm_model:    model,
         llm_api_key:  apiKey.trim(),
         skills:       selectedProfile.skills,
+        enable_web_search: selectedProfile.enableWebSearch !== false,
         user_id:      'demo_user',
       });
 
@@ -116,7 +123,7 @@ export default function HirePage() {
     return map[status] || status;
   }
 
-  const providerObj = LLM_PROVIDERS.find(p => p.id === provider.id) || LLM_PROVIDERS[0];
+  const providerObj = findProvider(provider.id);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '40px 24px' }}>
@@ -175,7 +182,7 @@ export default function HirePage() {
                 <select
                   className="select"
                   value={provider.id}
-                  onChange={e => setProvider(LLM_PROVIDERS.find(p => p.id === e.target.value))}
+                  onChange={e => setProvider(findProvider(e.target.value))}
                 >
                   {LLM_PROVIDERS.map(p => (
                     <option key={p.id} value={p.id}>{p.label}</option>
@@ -194,7 +201,9 @@ export default function HirePage() {
                   onChange={e => setModel(e.target.value)}
                 >
                   {providerObj.models.map(m => (
-                    <option key={m} value={m}>{m}</option>
+                    <option key={getModelId(m)} value={getModelId(m)}>
+                      {getModelLabel(m)}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -208,13 +217,27 @@ export default function HirePage() {
               <input
                 type="password"
                 className="input"
-                placeholder={`Your ${provider.label} API key`}
+                placeholder={providerObj.apiKeyPlaceholder || `Your ${providerObj.label} API key`}
                 value={apiKey}
                 onChange={e => setApiKey(e.target.value)}
                 required
+                autoComplete="off"
               />
               <p style={{ fontSize: 11, color: 'var(--text2)', marginTop: 4 }}>
                 Stored only for this session, injected into the container environment.
+                {providerObj.apiKeyHelpUrl && (
+                  <>
+                    {' '}
+                    <a
+                      href={providerObj.apiKeyHelpUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      Get API key ↗
+                    </a>
+                  </>
+                )}
               </p>
             </div>
 

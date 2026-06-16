@@ -6,8 +6,12 @@
  * published to the KASM VM host, so the backend reaches it directly over HTTP.
  *
  * Endpoints:
- *   GET  /health           — liveness probe + reports agent_id/role
- *   POST /chat             — proxies message to OpenClaw gateway :18789
+ *   GET  /health              — liveness probe + reports agent_id/role
+ *   GET  /artifacts/:filename — serve persisted deliverables (HTML, PDF, etc.)
+ *   POST /chat                — proxies message to OpenClaw gateway :18789
+ *
+ * Chat uses OpenClaw /v1/chat/completions (full agent run with tools + skills).
+ * Workspace files (SOUL.md, AGENTS.md) and ClawHub skills load via the gateway.
  *
  * Authentication: Bearer <TEAMBOTS_TOKEN> (injected by backend at hire time)
  */
@@ -19,6 +23,14 @@ const axios   = require('axios');
 const fs      = require('fs');
 const path    = require('path');
 
+const {
+  ensureArtifactsDir,
+  processResponseArtifacts,
+  resolveArtifactPath,
+  mimeForFilename,
+} = require('./artifacts');
+const { buildArtifactInstructions } = require('./artifactPrompt');
+
 const BRIDGE_PORT    = parseInt(process.env.BRIDGE_PORT    || '3100',  10);
 const GATEWAY_PORT   = parseInt(process.env.GATEWAY_PORT   || '18789', 10);
 const GATEWAY_URL    = `http://127.0.0.1:${GATEWAY_PORT}`;
@@ -27,6 +39,7 @@ const AGENT_ROLE     = process.env.AGENT_ROLE  || 'General Assistant';
 const LLM_PROVIDER   = process.env.LLM_PROVIDER || 'google';
 const LLM_MODEL      = process.env.LLM_MODEL || 'gemini-2.0-flash';
 const BRIDGE_TOKEN   = process.env.TEAMBOTS_TOKEN;
+const CHAT_TIMEOUT_MS = parseInt(process.env.TEAMBOTS_CHAT_TIMEOUT_MS || '120000', 10);
 
 function resolveModelRef() {
   if (process.env.MODEL_REF) return process.env.MODEL_REF;
@@ -40,9 +53,9 @@ function resolveModelRef() {
 
 const MODEL_REF = resolveModelRef();
 
-// Log directory (writable inside container)
 const LOG_DIR = process.env.TEAMBOTS_LOG_DIR || `${process.env.HOME || '/root'}/.teambots/logs`;
 fs.mkdirSync(LOG_DIR, { recursive: true });
+ensureArtifactsDir();
 
 const logStream = fs.createWriteStream(path.join(LOG_DIR, 'bridge.log'), { flags: 'a' });
 function log(level, msg, meta = {}) {
@@ -51,14 +64,11 @@ function log(level, msg, meta = {}) {
   logStream.write(line);
 }
 
-// ── Express app ──────────────────────────────────────────────────────────────
-
 const app = express();
 app.use(express.json());
 
-/** Verify Authorization: Bearer <TEAMBOTS_TOKEN> */
 function auth(req, res, next) {
-  if (!BRIDGE_TOKEN) return next(); // token not configured — open (dev only)
+  if (!BRIDGE_TOKEN) return next();
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (token !== BRIDGE_TOKEN) {
@@ -68,18 +78,38 @@ function auth(req, res, next) {
   next();
 }
 
-// ── GET /health ──────────────────────────────────────────────────────────────
-
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, agent_id: AGENT_ID, role: AGENT_ROLE, bridge: 'teambots-bridge' });
+  res.json({
+    ok: true,
+    agent_id: AGENT_ID,
+    role: AGENT_ROLE,
+    bridge: 'teambots-bridge',
+    web_search: process.env.TEAMBOTS_ENABLE_WEB_SEARCH !== 'false',
+  });
 });
 
-// ── POST /chat ───────────────────────────────────────────────────────────────
-// Body: { message, conversation_id, user_id }
-// Returns: { message, role:'assistant', ... }
+app.get('/artifacts/:filename', auth, (req, res) => {
+  const filePath = resolveArtifactPath(req.params.filename);
+  if (!filePath) {
+    return res.status(404).json({ error: 'Artifact not found' });
+  }
+
+  const filename = path.basename(filePath);
+  const mime = mimeForFilename(filename);
+  const download = req.query.download === '1' || req.query.download === 'true';
+
+  res.setHeader('Content-Type', mime);
+  if (download) {
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  } else if (mime.startsWith('text/html')) {
+    res.setHeader('Content-Disposition', 'inline');
+  }
+
+  return res.sendFile(filePath);
+});
 
 app.post('/chat', auth, async (req, res) => {
-  const { message, conversation_id = 'default', user_id = 'user' } = req.body;
+  const { message, conversation_id = 'default' } = req.body;
 
   if (!message?.trim()) {
     return res.status(400).json({ error: 'message is required' });
@@ -90,13 +120,15 @@ app.post('/chat', auth, async (req, res) => {
   try {
     const gatewayToken = await getGatewayToken();
 
+    // OpenClaw agent run: workspace SOUL.md/AGENTS.md + ClawHub skills + web_search tools.
+    // Supplement with short instructions only for TeamBots-specific behavior (artifacts, no onboarding).
     const gwRes = await axios.post(
       `${GATEWAY_URL}/v1/chat/completions`,
       {
         model: 'openclaw/default',
         user: conversation_id ? `conv:${conversation_id}` : `agent:${AGENT_ID}`,
         messages: [
-          { role: 'system', content: buildSystemPrompt() },
+          { role: 'system', content: buildInstructions() },
           { role: 'user',   content: message },
         ],
         stream: false,
@@ -107,27 +139,39 @@ app.post('/chat', auth, async (req, res) => {
           'Authorization': `Bearer ${gatewayToken}`,
           'x-openclaw-model': MODEL_REF,
         },
-        timeout: 90_000,
+        timeout: CHAT_TIMEOUT_MS,
       }
     );
 
     const choice  = gwRes.data?.choices?.[0];
-    const content = choice?.message?.content || '';
-    if (!content.trim() || content.trim() === 'No response from OpenClaw.') {
+    const rawContent = choice?.message?.content || '';
+    if (!rawContent.trim() || rawContent.trim() === 'No response from OpenClaw.') {
       log('WARN', 'empty gateway reply', { conversation_id, finish: choice?.finish_reason });
       return res.status(502).json({
         error: 'Agent returned an empty response',
         detail: 'OpenClaw completed without text output. Check ~/.teambots/logs/openclaw-gateway.log',
       });
     }
-    log('INFO', 'chat ok', { conversation_id, responseLen: content.length });
+
+    const { message: displayMessage, artifacts } = await processResponseArtifacts(rawContent, {
+      conversationId: conversation_id,
+      agentRole: AGENT_ROLE,
+      log,
+    });
+
+    log('INFO', 'chat ok', {
+      conversation_id,
+      responseLen: displayMessage.length,
+      artifactCount: artifacts.length,
+    });
 
     return res.json({
-      message:         content,
+      message:         displayMessage,
       role:            'assistant',
       model:           gwRes.data?.model,
       conversation_id,
       agent_id:        AGENT_ID,
+      artifacts,
     });
   } catch (err) {
     const status = err.response?.status;
@@ -137,12 +181,8 @@ app.post('/chat', auth, async (req, res) => {
   }
 });
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Read the gateway token from ~/.teambots/token (written by kasm_start_agent.sh) */
 function getGatewayToken() {
   const tokenFile = `${process.env.HOME || '/root'}/.teambots/token`;
-  // Retry up to 30s while the gateway is still starting
   return new Promise((resolve, reject) => {
     let attempts = 0;
     const check = () => {
@@ -159,17 +199,15 @@ function getGatewayToken() {
   });
 }
 
-function buildSystemPrompt() {
+/** Short supplement merged into OpenClaw instructions — workspace files carry persona/rules. */
+function buildInstructions() {
   return [
-    `You are ${AGENT_ROLE}.`,
-    `Agent ID: ${AGENT_ID}.`,
-    `You are a pre-configured TeamBots hire — do NOT run OpenClaw onboarding or ask for name/vibe/emoji.`,
-    `Answer the user's request directly in your hired role.`,
-    `Do not use web_search or other tools unless explicitly asked to browse the web.`,
-  ].join(' ');
+    `TeamBots hire ${AGENT_ID} (${AGENT_ROLE}). Do NOT run OpenClaw onboarding or ask for name/vibe/emoji.`,
+    `Use the web_search tool when the user asks for latest news, current trends, headlines, or live information.`,
+    `Cite source titles and URLs from search results. Do not refuse by saying you cannot browse the web.`,
+    buildArtifactInstructions(AGENT_ROLE),
+  ].join('\n\n');
 }
-
-// ── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(BRIDGE_PORT, '0.0.0.0', () => {
   log('INFO', `Bridge listening on 0.0.0.0:${BRIDGE_PORT}`, {

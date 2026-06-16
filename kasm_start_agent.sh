@@ -42,7 +42,7 @@ OC_CONFIG="${OC_DIR}/openclaw.json"
 BRIDGE_DIR="/opt/teambots_openclaw/bridge"
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
-mkdir -p "${LOG_DIR}" "${TB_HOME}" "${OC_DIR}"
+mkdir -p "${LOG_DIR}" "${TB_HOME}" "${OC_DIR}" "${TB_HOME}/artifacts"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_DIR}/startup.log"; }
 die() { log "ERROR: $*"; exit 1; }
@@ -102,6 +102,42 @@ node /opt/teambots_openclaw/scripts/seed-agent-workspace.js \
   >> "${LOG_DIR}/startup.log" 2>&1 \
   || die "seed-agent-workspace.js failed — see startup.log"
 log "Agent workspace seeded (${AGENT_ROLE})"
+
+# Patch stale configs from older image builds.
+if [[ -f "${OC_CONFIG}" ]]; then
+  node -e "
+    const fs = require('fs');
+    const p = process.argv[1];
+    const webSearch = process.env.TEAMBOTS_ENABLE_WEB_SEARCH !== 'false';
+    const allowed = new Set(['minimal', 'coding', 'messaging', 'full']);
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    cfg.tools = cfg.tools || {};
+    let patched = false;
+
+    if (cfg.tools.profile && !allowed.has(cfg.tools.profile)) {
+      cfg.tools.profile = webSearch ? 'messaging' : 'minimal';
+      patched = true;
+      console.log('Patched invalid tools.profile -> ' + cfg.tools.profile);
+    }
+
+    const allow = Array.isArray(cfg.tools.allow) ? cfg.tools.allow : [];
+    if (cfg.tools.profile === 'minimal' && allow.includes('group:web')) {
+      cfg.tools.profile = 'messaging';
+      cfg.tools.allow = allow.filter(t => t !== 'group:web');
+      if (cfg.tools.allow.length === 0) delete cfg.tools.allow;
+      patched = true;
+      console.log('Patched broken minimal+group:web -> messaging');
+    }
+
+    if (webSearch && cfg.tools.profile === 'minimal' && cfg.tools.web?.search?.enabled) {
+      cfg.tools.profile = 'messaging';
+      patched = true;
+      console.log('Patched web-enabled minimal profile -> messaging');
+    }
+
+    if (patched) fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+  " "${OC_CONFIG}" >> "${LOG_DIR}/startup.log" 2>&1 || true
+fi
 
 # Validate before starting — invalid config makes gateway exit immediately.
 if openclaw config validate >> "${LOG_DIR}/startup.log" 2>&1; then

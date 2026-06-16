@@ -4,7 +4,11 @@
 
 'use strict';
 
-require('dotenv').config();
+const path = require('path');
+
+// Load repo root .env first, then backend/.env (backend wins on conflicts).
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express  = require('express');
 const cors     = require('cors');
@@ -35,6 +39,7 @@ app.use('/api/agents',      (() => {
   // Chat sub-route: POST /api/agents/:agentId/chat
   const r = require('express').Router();
   r.use('/:agentId/chat', require('./routes/chat'));
+  r.use('/:agentId/artifacts', require('./routes/artifacts'));
   return r;
 })());
 app.use('/webhooks',        require('./routes/webhooks'));
@@ -51,4 +56,6 @@ app.listen(PORT, '0.0.0.0', () => {
   log.info(`TeamBots backend listening on 0.0.0.0:${PORT}`);
   log.info(`Webhook base: ${process.env.TEAMBOTS_WEBHOOK_BASE || '(not set — set TEAMBOTS_WEBHOOK_BASE to your UTM host IP)'}`);
   log.info(`KASM server:  ${process.env.KASM_BASE_URL || '(not set)'}`);
+  const imageId = process.env.KASM_IMAGE_ID || '';
+  log.info(`KASM image:   ${imageId ? `${imageId.slice(0, 8)}…` : '(not set — copy from KASM Admin → Workspaces)'}`);
 });

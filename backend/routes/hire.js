@@ -30,6 +30,7 @@ router.post('/', async (req, res) => {
     llm_model = 'gemini-2.0-flash',
     llm_api_key,
     skills = '',
+    enable_web_search,
     user_id: tbUserId = 'demo_user',
   } = req.body;
 
@@ -51,7 +52,9 @@ router.post('/', async (req, res) => {
   // The URL the container will POST to when the bridge is ready and for chat responses
   const webhookBase = (process.env.TEAMBOTS_WEBHOOK_BASE || 'http://localhost:4000').replace(/\/$/, '');
 
-  log.info('hire start', { agentId, role, tbUserId });
+  const webSearchEnabled = enable_web_search !== false && enable_web_search !== 'false';
+
+  log.info('hire start', { agentId, role, tbUserId, webSearchEnabled });
 
   try {
     // 1 — Create KASM user
@@ -81,11 +84,19 @@ router.post('/', async (req, res) => {
       LLM_MODEL:         llm_model,
       LLM_API_KEY:       llm_api_key,
       SKILLS:            skills,
+      TEAMBOTS_ENABLE_WEB_SEARCH: webSearchEnabled ? 'true' : 'false',
       // Token the bridge uses to authenticate the ready webhook + incoming chat
       TEAMBOTS_TOKEN:    bridgeToken,
       // Webhook endpoint the bridge calls when it comes online (agent-ready only)
       TEAMBOTS_WEBHOOK:  `${webhookBase}/webhooks`,
     };
+
+    if (process.env.TEAMBOTS_WEB_SEARCH_PROVIDER) {
+      envVars.TEAMBOTS_WEB_SEARCH_PROVIDER = process.env.TEAMBOTS_WEB_SEARCH_PROVIDER;
+    }
+    if (process.env.TEAMBOTS_MCP_SERVERS) {
+      envVars.TEAMBOTS_MCP_SERVERS = process.env.TEAMBOTS_MCP_SERVERS;
+    }
 
     const kasmSession = await kasm.requestKasm({
       userId:  kasmUserId,
